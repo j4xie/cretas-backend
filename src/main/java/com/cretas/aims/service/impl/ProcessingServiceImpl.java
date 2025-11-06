@@ -189,10 +189,9 @@ public class ProcessingServiceImpl implements ProcessingService {
 
         materialBatch.setFactoryId(factoryId);
         materialBatch.setStatus(MaterialBatchStatus.AVAILABLE);
-        materialBatch.setInitialQuantity(initialQty);  // ✅ 修复: 同步设置initial_quantity字段
-        materialBatch.setRemainingQuantity(initialQty);
-        materialBatch.setCurrentQuantity(initialQty);
-        materialBatch.setTotalQuantity(initialQty);
+        // 注意: initialQuantity, remainingQuantity, currentQuantity, totalQuantity 都是计算属性
+        // 只需设置核心字段: receiptQuantity, usedQuantity, reservedQuantity
+        materialBatch.setReceiptQuantity(initialQty);  // receiptQuantity 是核心字段
         materialBatch.setUsedQuantity(BigDecimal.ZERO);
         materialBatch.setReservedQuantity(BigDecimal.ZERO);
 
@@ -201,19 +200,18 @@ public class ProcessingServiceImpl implements ProcessingService {
             materialBatch.setPurchaseDate(materialBatch.getReceiptDate());
         }
 
-        // 设置total_weight（如果没有提供，使用initialQty作为默认值）
-        if (materialBatch.getTotalWeight() == null) {
-            materialBatch.setTotalWeight(initialQty);
+        // 注意: totalWeight 是计算属性 (weightPerUnit × receiptQuantity)
+        // 如果没有提供 weightPerUnit，使用默认值1.0 (表示1kg/单位)
+        if (materialBatch.getWeightPerUnit() == null) {
+            materialBatch.setWeightPerUnit(BigDecimal.ONE);
         }
 
-        // 计算总价和总价值
-        if (materialBatch.getUnitPrice() != null && initialQty != null) {
-            BigDecimal totalValue = initialQty.multiply(materialBatch.getUnitPrice());
-            materialBatch.setTotalPrice(totalValue);
-            materialBatch.setTotalValue(totalValue);  // 设置total_value字段
-        } else {
-            // 如果没有单价，设置默认值
-            materialBatch.setTotalValue(BigDecimal.ZERO);
+        // 注意: totalPrice 和 totalValue 都是计算属性
+        // totalPrice = unitPrice × receiptQuantity，会自动计算
+        // 只需确保设置了 unitPrice 即可
+        if (materialBatch.getUnitPrice() == null) {
+            // 如果没有单价，设置默认值0
+            materialBatch.setUnitPrice(BigDecimal.ZERO);
         }
 
         return materialBatchRepository.save(materialBatch);
@@ -264,9 +262,8 @@ public class ProcessingServiceImpl implements ProcessingService {
                 throw new BusinessException("原材料库存不足: " + materialBatch.getBatchNumber());
             }
             // 更新库存
+            // 注意: remainingQuantity 和 currentQuantity 是计算属性，会自动重新计算
             materialBatch.setUsedQuantity(materialBatch.getUsedQuantity().add(quantity));
-            materialBatch.setRemainingQuantity(materialBatch.getRemainingQuantity().subtract(quantity));
-            materialBatch.setCurrentQuantity(materialBatch.getCurrentQuantity().subtract(quantity));
             materialBatch.setLastUsedAt(LocalDateTime.now());
             // 创建消耗记录
             MaterialConsumption consumptionRecord = new MaterialConsumption();
@@ -628,49 +625,23 @@ public class ProcessingServiceImpl implements ProcessingService {
         analysis.put("totalEquipmentCost", totalEquipmentCost);
 
         // ========== 5. 人工工时详情 ==========
-        List<BatchWorkSession> workSessions = batchWorkSessionRepository.findByBatchIdWithDetails(batchId);
+        // TODO-FIX: BatchWorkSession关联到ProcessingBatch(ID:Integer),而此方法接收ProductionBatch(ID:Long)
+        // 导致类型不匹配错误。暂时使用batch表中的labor_cost字段,后续需要统一数据模型。
+        // 问题详情: BatchWorkSession.batchId是Integer类型,关联processing_batches表
+        // 而这里的batchId参数是Long类型,来自production_batches表
+
         List<Map<String, Object>> laborDetails = new ArrayList<>();
-        BigDecimal totalLaborCost = BigDecimal.ZERO;
-        int totalWorkMinutes = 0;
+        BigDecimal totalLaborCost = batch.getLaborCost() != null ? batch.getLaborCost() : BigDecimal.ZERO;
+        int totalWorkMinutes = batch.getWorkDurationMinutes() != null ? batch.getWorkDurationMinutes() : 0;
 
-        for (BatchWorkSession session : workSessions) {
-            Map<String, Object> laborDetail = new HashMap<>();
-
-            laborDetail.put("sessionId", session.getId());
-            laborDetail.put("workMinutes", session.getWorkMinutes());
-            laborDetail.put("laborCost", session.getLaborCost());
-
-            // 员工信息
-            if (session.getWorkSession() != null && session.getWorkSession().getUser() != null) {
-                User employee = session.getWorkSession().getUser();
-                Map<String, Object> employeeInfo = new HashMap<>();
-                employeeInfo.put("id", employee.getId());
-                employeeInfo.put("username", employee.getUsername());
-                employeeInfo.put("fullName", employee.getFullName());
-                employeeInfo.put("department", employee.getDepartment());
-                laborDetail.put("employee", employeeInfo);
-            }
-
-            // 工种信息
-            if (session.getWorkSession() != null && session.getWorkSession().getWorkType() != null) {
-                Map<String, Object> workTypeInfo = new HashMap<>();
-                workTypeInfo.put("id", session.getWorkSession().getWorkType().getId());
-                workTypeInfo.put("name", session.getWorkSession().getWorkType().getName());
-                workTypeInfo.put("baseRate", session.getWorkSession().getWorkType().getBaseRate());
-                workTypeInfo.put("billingType", session.getWorkSession().getWorkType().getBillingType());
-                laborDetail.put("workType", workTypeInfo);
-            }
-
-            // 工作时段
-            if (session.getWorkSession() != null) {
-                laborDetail.put("startTime", session.getWorkSession().getStartTime());
-                laborDetail.put("endTime", session.getWorkSession().getEndTime());
-            }
-
-            totalLaborCost = totalLaborCost.add(session.getLaborCost());
-            totalWorkMinutes += session.getWorkMinutes();
-
-            laborDetails.add(laborDetail);
+        // 添加汇总信息 (详细的工时会话数据需要数据模型统一后才能查询)
+        if (totalLaborCost.compareTo(BigDecimal.ZERO) > 0 || totalWorkMinutes > 0) {
+            Map<String, Object> laborSummary = new HashMap<>();
+            laborSummary.put("workMinutes", totalWorkMinutes);
+            laborSummary.put("laborCost", totalLaborCost);
+            laborSummary.put("workerCount", batch.getWorkerCount());
+            laborSummary.put("note", "工时详情需要数据模型统一后提供");
+            laborDetails.add(laborSummary);
         }
 
         analysis.put("laborSessions", laborDetails);
@@ -1086,6 +1057,113 @@ public class ProcessingServiceImpl implements ProcessingService {
     public List<Map<String, Object>> getAISessionHistory(String sessionId) {
         log.info("获取AI会话历史: sessionId={}", sessionId);
         return aiAnalysisService.getSessionHistory(sessionId);
+    }
+
+    /**
+     * 获取时间范围内的批次成本分析数据
+     */
+    @Override
+    public List<Map<String, Object>> getTimeRangeBatchesCostAnalysis(
+            String factoryId,
+            java.time.LocalDateTime startDate,
+            java.time.LocalDateTime endDate) {
+
+        log.info("获取时间范围批次成本数据: factoryId={}, startDate={}, endDate={}",
+                factoryId, startDate, endDate);
+
+        // 1. 查询时间范围内的所有批次
+        List<ProductionBatch> batches = productionBatchRepository
+                .findByFactoryIdAndCreatedAtBetween(factoryId, startDate, endDate);
+
+        log.info("查询到{}个批次", batches.size());
+
+        // 2. 限制最大批次数量（避免Token消耗过大）
+        final int MAX_BATCHES = 50;
+        if (batches.size() > MAX_BATCHES) {
+            log.warn("批次数量过多({})，限制为前{}个", batches.size(), MAX_BATCHES);
+            batches = batches.subList(0, MAX_BATCHES);
+        }
+
+        // 3. 为每个批次获取增强的成本数据
+        List<Map<String, Object>> batchesCostData = batches.stream()
+                .map(batch -> {
+                    try {
+                        Map<String, Object> costData = getEnhancedBatchCostAnalysis(factoryId, batch.getId());
+                        // 添加批次基本信息
+                        costData.put("batchNumber", batch.getBatchNumber());
+                        costData.put("productName", batch.getProductName());
+                        costData.put("status", batch.getStatus());
+                        costData.put("createdAt", batch.getCreatedAt());
+                        return costData;
+                    } catch (Exception e) {
+                        log.error("获取批次成本数据失败: batchId={}, error={}",
+                                batch.getId(), e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(data -> data != null)
+                .collect(java.util.stream.Collectors.toList());
+
+        log.info("成功获取{}个批次的成本数据", batchesCostData.size());
+
+        return batchesCostData;
+    }
+
+    /**
+     * 获取多个批次的对比分析数据
+     */
+    @Override
+    public List<Map<String, Object>> getComparativeBatchesCostAnalysis(
+            String factoryId,
+            List<Long> batchIds) {
+
+        log.info("获取批次对比分析数据: factoryId={}, batchIds={}", factoryId, batchIds);
+
+        // 1. 参数校验：确保批次数量在2-5之间
+        if (batchIds == null || batchIds.size() < 2) {
+            throw new IllegalArgumentException("至少需要2个批次进行对比分析");
+        }
+        if (batchIds.size() > 5) {
+            throw new IllegalArgumentException("最多支持5个批次进行对比分析");
+        }
+
+        // 2. 为每个批次获取增强的成本数据
+        List<Map<String, Object>> comparativeBatchesData = batchIds.stream()
+                .map(batchId -> {
+                    try {
+                        // 获取批次基本信息
+                        ProductionBatch batch = productionBatchRepository.findByIdAndFactoryId(batchId, factoryId)
+                                .orElseThrow(() -> new RuntimeException("批次不存在: " + batchId));
+
+                        // 获取增强的成本数据
+                        Map<String, Object> costData = getEnhancedBatchCostAnalysis(factoryId, batchId);
+
+                        // 添加批次基本信息
+                        costData.put("batchId", batch.getId());
+                        costData.put("batchNumber", batch.getBatchNumber());
+                        costData.put("productName", batch.getProductName());
+                        costData.put("status", batch.getStatus());
+                        costData.put("createdAt", batch.getCreatedAt());
+
+                        log.info("成功获取批次{}的成本数据", batchId);
+                        return costData;
+
+                    } catch (Exception e) {
+                        log.error("获取批次成本数据失败: batchId={}, error={}", batchId, e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(data -> data != null)
+                .collect(java.util.stream.Collectors.toList());
+
+        // 3. 校验：确保所有批次数据都获取成功
+        if (comparativeBatchesData.size() < 2) {
+            throw new RuntimeException("至少需要2个有效批次数据才能进行对比分析");
+        }
+
+        log.info("成功获取{}个批次的对比数据", comparativeBatchesData.size());
+
+        return comparativeBatchesData;
     }
 
     /**

@@ -8,6 +8,8 @@ package com.cretas.aims.entity.enums;
  * @since 2025-01-09
  */
 public enum MaterialBatchStatus {
+    /** 库存中（兼容旧数据） */
+    IN_STOCK("库存中", "批次在库存中"),
     /** 可用 */
     AVAILABLE("可用", "批次可以正常使用"),
     /** 已耗尽（预留+剩余=0） */

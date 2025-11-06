@@ -1,10 +1,12 @@
 package com.cretas.aims.controller;
 
+import com.cretas.aims.dto.MobileDTO;
 import com.cretas.aims.dto.common.ApiResponse;
 import com.cretas.aims.dto.common.PageRequest;
 import com.cretas.aims.dto.common.PageResponse;
 import com.cretas.aims.entity.MaterialBatch;
 import com.cretas.aims.entity.ProductionBatch;
+import com.cretas.aims.service.AIEnterpriseService;
 import com.cretas.aims.service.MobileService;
 import com.cretas.aims.service.ProcessingService;
 import com.cretas.aims.utils.TokenUtils;
@@ -16,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.validation.Valid;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -38,6 +42,7 @@ public class ProcessingController {
 
     private final ProcessingService processingService;
     private final MobileService mobileService;
+    private final AIEnterpriseService aiEnterpriseService;
 
     // ========== 批次管理接口 ==========
 
@@ -314,46 +319,8 @@ public class ProcessingController {
     }
 
     // ========== AI成本分析接口 ==========
-
-    /**
-     * AI智能成本分析
-     */
-    @PostMapping("/batches/{batchId}/ai-cost-analysis")
-    @Operation(summary = "AI智能成本分析", description = "使用AI分析批次成本并给出优化建议")
-    public ApiResponse<Map<String, Object>> aiCostAnalysis(
-            @PathVariable @Parameter(description = "工厂ID") String factoryId,
-            @PathVariable @Parameter(description = "批次ID") Long batchId,
-            @RequestParam(required = false) @Parameter(description = "会话ID（用于多轮对话）") String sessionId,
-            @RequestParam(required = false) @Parameter(description = "自定义问题") String customMessage) {
-        log.info("AI成本分析: factoryId={}, batchId={}, sessionId={}", factoryId, batchId, sessionId);
-        Map<String, Object> result = processingService.analyzeWithAI(factoryId, batchId, sessionId, customMessage);
-        return ApiResponse.success(result);
-    }
-
-    /**
-     * 获取AI对话历史
-     */
-    @GetMapping("/ai-sessions/{sessionId}")
-    @Operation(summary = "AI对话历史", description = "获取AI成本分析对话历史")
-    public ApiResponse<List<Map<String, Object>>> getAISessionHistory(
-            @PathVariable @Parameter(description = "工厂ID") String factoryId,
-            @PathVariable @Parameter(description = "会话ID") String sessionId) {
-        log.info("获取AI对话历史: factoryId={}, sessionId={}", factoryId, sessionId);
-        List<Map<String, Object>> history = processingService.getAISessionHistory(sessionId);
-        return ApiResponse.success(history);
-    }
-
-    /**
-     * AI服务健康检查
-     */
-    @GetMapping("/ai-service/health")
-    @Operation(summary = "AI服务健康检查", description = "检查AI服务是否可用")
-    public ApiResponse<Map<String, Object>> checkAIServiceHealth(
-            @PathVariable @Parameter(description = "工厂ID") String factoryId) {
-        log.info("检查AI服务健康状态: factoryId={}", factoryId);
-        Map<String, Object> health = processingService.checkAIServiceHealth();
-        return ApiResponse.success(health);
-    }
+    // 所有AI接口已迁移到 AIController (/api/mobile/{factoryId}/ai/*)
+    // 详见: com.cretas.aims.controller.AIController
 
     // ========== 仪表盘接口 ==========
 
@@ -446,4 +413,10 @@ public class ProcessingController {
         Map<String, Object> dashboard = processingService.getEquipmentDashboard(factoryId);
         return ApiResponse.success(dashboard);
     }
+
+    // ========== AI接口已全部迁移 ==========
+    // 所有AI相关功能（成本分析、配额查询、报告管理、对话历史）已迁移到统一接口
+    // 新接口位置: AIController (/api/mobile/{factoryId}/ai/*)
+    // 详见: com.cretas.aims.controller.AIController
+
 }

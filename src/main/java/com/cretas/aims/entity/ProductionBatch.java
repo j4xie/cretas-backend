@@ -1,11 +1,15 @@
 package com.cretas.aims.entity;
 
+import com.cretas.aims.entity.enums.ProductionBatchStatus;
+import com.cretas.aims.entity.enums.QualityStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import javax.persistence.*;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 /**
  * 生产批次实体
@@ -15,6 +19,7 @@ import java.time.LocalDateTime;
  * @since 2025-01-09
  */
 @Data
+@EqualsAndHashCode(callSuper = true)  // 继承 BaseEntity，需要调用 super
 @Entity
 @Table(name = "production_batches",
        indexes = {
@@ -27,7 +32,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProductionBatch {
+public class ProductionBatch extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -77,15 +82,17 @@ public class ProductionBatch {
     @Column(name = "defect_quantity", precision = 12, scale = 2)
     private BigDecimal defectQuantity;
      /**
-      * 批次状态: PENDING, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED
+      * 批次状态: PLANNED, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED
       */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    private ProductionBatchStatus status;
      /**
-      * 质量状态: PENDING_INSPECTION, PASSED, FAILED, PARTIAL_PASS
+      * 质量状态: PENDING_INSPECTION, INSPECTING, PASSED, FAILED, PARTIAL_PASS, REWORK_REQUIRED, etc.
       */
-    @Column(name = "quality_status", length = 20)
-    private String qualityStatus;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "quality_status", length = 30)
+    private QualityStatus qualityStatus;
      /**
       * 开始时间
       */
@@ -176,28 +183,23 @@ public class ProductionBatch {
       */
     @Column(name = "created_by")
     private Integer createdBy;
-     /**
-      * 创建时间
-      */
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
-     /**
-      * 更新时间
-      */
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+
+    // ==========================================
+    // 注意: createdAt 和 updatedAt 字段已从 BaseEntity 继承
+    // 不再需要在此定义，避免字段重复
+    // ==========================================
+
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        super.onCreate();  // 调用 BaseEntity 的时间戳初始化
         if (status == null) {
-            status = "PENDING";
+            status = ProductionBatchStatus.PLANNED;
         }
     }
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-        calculateMetrics();
+        super.onUpdate();  // 调用 BaseEntity 的时间戳更新
+        calculateMetrics();  // 保留业务逻辑：自动计算指标
     }
 
     /**
@@ -215,19 +217,19 @@ public class ProductionBatch {
 
         // 计算单位成本
         if (totalCost != null && actualQuantity != null && actualQuantity.compareTo(BigDecimal.ZERO) > 0) {
-            unitCost = totalCost.divide(actualQuantity, 4, BigDecimal.ROUND_HALF_UP);
+            unitCost = totalCost.divide(actualQuantity, 4, RoundingMode.HALF_UP);
         }
 
         // 计算良品率
         if (goodQuantity != null && actualQuantity != null && actualQuantity.compareTo(BigDecimal.ZERO) > 0) {
             yieldRate = goodQuantity.multiply(BigDecimal.valueOf(100))
-                    .divide(actualQuantity, 2, BigDecimal.ROUND_HALF_UP);
+                    .divide(actualQuantity, 2, RoundingMode.HALF_UP);
         }
 
         // 计算效率
         if (actualQuantity != null && plannedQuantity != null && plannedQuantity.compareTo(BigDecimal.ZERO) > 0) {
             efficiency = actualQuantity.multiply(BigDecimal.valueOf(100))
-                    .divide(plannedQuantity, 2, BigDecimal.ROUND_HALF_UP);
+                    .divide(plannedQuantity, 2, RoundingMode.HALF_UP);
         }
 
         // 计算工作时长

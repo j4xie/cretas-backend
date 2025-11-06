@@ -26,7 +26,7 @@ import java.util.List;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/mobile/{factoryId}/products/types")
+@RequestMapping("/api/mobile/{factoryId}/product-types")
 @RequiredArgsConstructor
 @Tag(name = "产品类型管理")
 @Validated

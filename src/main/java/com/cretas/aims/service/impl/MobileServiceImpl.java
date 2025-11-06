@@ -132,8 +132,9 @@ public class MobileServiceImpl implements MobileService {
             recordDeviceLogin(user.getId(), request.getDeviceInfo());
         }
 
-        // 生成令牌
-        String token = jwtUtil.generateToken(user.getId().toString());
+        // 生成令牌（包含角色信息）
+        String role = user.getRoleCode() != null ? user.getRoleCode() : "viewer";
+        String token = jwtUtil.generateToken(user.getId().toString(), role);
         String refreshToken = jwtUtil.generateRefreshToken(user.getId().toString());
 
         // 更新最后登录时间
@@ -183,8 +184,9 @@ public class MobileServiceImpl implements MobileService {
             recordDeviceLogin(admin.getId(), deviceInfo);
         }
 
-        // 生成令牌（使用 "platform_" 前缀区分平台管理员）
-        String token = jwtUtil.generateToken("platform_" + admin.getId());
+        // 生成令牌（使用 "platform_" 前缀区分平台管理员，包含角色信息）
+        String role = admin.getPlatformRole() != null ? admin.getPlatformRole().name() : "auditor";
+        String token = jwtUtil.generateToken("platform_" + admin.getId(), role);
         String refreshToken = jwtUtil.generateRefreshToken("platform_" + admin.getId());
 
         // 更新最后登录时间

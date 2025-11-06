@@ -101,11 +101,8 @@ public class MaterialBatchMapper {
         batch.setReceiptQuantity(request.getReceiptQuantity());
         batch.setQuantityUnit(request.getQuantityUnit());
         batch.setWeightPerUnit(request.getWeightPerUnit());
-        batch.setTotalWeight(request.getTotalWeight());
-        batch.setCurrentQuantity(request.getTotalWeight()); // 初始时当前数量等于总重量
-        batch.setTotalQuantity(request.getTotalWeight());
-        batch.setRemainingQuantity(request.getTotalWeight());
-        batch.setTotalValue(request.getTotalValue());
+        // 注意: totalWeight, currentQuantity, totalQuantity, remainingQuantity, totalValue
+        // 现在都是计算属性，不再需要手动设置
 
         // 计算单价并验证（以总价值为准）
         BigDecimal calculatedUnitPrice = request.getTotalValue()
@@ -134,7 +131,7 @@ public class MaterialBatchMapper {
 
         // 始终使用计算值（以总价值为准）
         batch.setUnitPrice(calculatedUnitPrice);
-        batch.setTotalPrice(request.getTotalValue()); // 总价等于总价值
+        // 注意: totalPrice 现在是计算属性 (unitPrice × receiptQuantity)，不再需要手动设置
         batch.setStatus(MaterialBatchStatus.AVAILABLE);
         batch.setStorageLocation(request.getStorageLocation());
         batch.setQualityCertificate(request.getQualityCertificate());
@@ -167,8 +164,8 @@ public class MaterialBatchMapper {
             batch.setReceiptDate(request.getReceiptDate());
         }
         if (request.getTotalValue() != null) {
-            batch.setTotalValue(request.getTotalValue());
-            // 重新计算单价
+            // 注意: totalValue 现在是计算属性，不再存储
+            // 根据 totalValue 反算 unitPrice
             if (batch.getTotalWeight() != null && batch.getTotalWeight().compareTo(BigDecimal.ZERO) > 0) {
                 BigDecimal newUnitPrice = request.getTotalValue()
                     .divide(batch.getTotalWeight(), 2, RoundingMode.HALF_UP);

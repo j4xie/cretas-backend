@@ -48,32 +48,27 @@ public class MaterialBatch extends BaseEntity {
     private LocalDate purchaseDate;  // 数据库遗留字段，与receiptDate同步
     @Column(name = "expire_date")
     private LocalDate expireDate;
+    // ===================================================================
+    // 核心字段 - 存储在数据库
+    // ===================================================================
+
     @Column(name = "receipt_quantity", nullable = false, precision = 10, scale = 2)
     private BigDecimal receiptQuantity;
-    @Column(name = "initial_quantity", precision = 10, scale = 2)
-    private BigDecimal initialQuantityField;  // 数据库遗留字段，与receiptQuantity同步
+
     @Column(name = "quantity_unit", nullable = false, length = 20)
     private String quantityUnit;
+
     @Column(name = "weight_per_unit", precision = 10, scale = 3)
     private BigDecimal weightPerUnit;
-    @Column(name = "total_weight", nullable = false, precision = 10, scale = 3)
-    private BigDecimal totalWeight;
-    @Column(name = "current_quantity", nullable = false, precision = 10, scale = 2)
-    private BigDecimal currentQuantity;
-    @Column(name = "total_quantity", nullable = false, precision = 10, scale = 2)
-    private BigDecimal totalQuantity;
-    @Column(name = "remaining_quantity", nullable = false, precision = 10, scale = 2)
-    private BigDecimal remainingQuantity;
+
     @Column(name = "used_quantity", nullable = false, precision = 10, scale = 2)
     private BigDecimal usedQuantity = BigDecimal.ZERO;
+
     @Column(name = "reserved_quantity", nullable = false, precision = 10, scale = 2)
     private BigDecimal reservedQuantity = BigDecimal.ZERO;
-    @Column(name = "total_value", nullable = false, precision = 10, scale = 2)
-    private BigDecimal totalValue;
+
     @Column(name = "unit_price", precision = 10, scale = 2)
     private BigDecimal unitPrice;
-    @Column(name = "total_price", precision = 10, scale = 2)
-    private BigDecimal totalPrice;
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private MaterialBatchStatus status = MaterialBatchStatus.AVAILABLE;
@@ -90,14 +85,17 @@ public class MaterialBatch extends BaseEntity {
     // 关联关系
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "factory_id", referencedColumnName = "id", insertable = false, updatable = false)
+    @org.hibernate.annotations.BatchSize(size = 10)
     private Factory factory;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "material_type_id", referencedColumnName = "id", insertable = false, updatable = false)
+    @org.hibernate.annotations.BatchSize(size = 20)
     private RawMaterialType materialType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supplier_id", referencedColumnName = "id", insertable = false, updatable = false)
+    @org.hibernate.annotations.BatchSize(size = 10)
     private Supplier supplier;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -113,35 +111,77 @@ public class MaterialBatch extends BaseEntity {
     @OneToMany(mappedBy = "materialBatch", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<ProductionPlanBatchUsage> planBatchUsages = new ArrayList<>();
 
+    // ===================================================================
+    // 计算属性 - 不存储在数据库，动态计算
+    // ===================================================================
+
     /**
-     * Convenience method to get initial quantity (alias for receiptQuantity)
+     * 获取当前可用数量
+     * 计算公式: receiptQuantity - usedQuantity - reservedQuantity
      */
+    @Transient
+    public BigDecimal getCurrentQuantity() {
+        if (receiptQuantity == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal used = usedQuantity != null ? usedQuantity : BigDecimal.ZERO;
+        BigDecimal reserved = reservedQuantity != null ? reservedQuantity : BigDecimal.ZERO;
+        return receiptQuantity.subtract(used).subtract(reserved);
+    }
+
+    /**
+     * 获取剩余数量（与getCurrentQuantity相同）
+     */
+    @Transient
+    public BigDecimal getRemainingQuantity() {
+        return getCurrentQuantity();
+    }
+
+    /**
+     * 获取总数量（与receiptQuantity相同）
+     */
+    @Transient
+    public BigDecimal getTotalQuantity() {
+        return receiptQuantity;
+    }
+
+    /**
+     * 获取初始数量（与receiptQuantity相同）
+     */
+    @Transient
     public BigDecimal getInitialQuantity() {
-        return this.receiptQuantity;
+        return receiptQuantity;
     }
 
     /**
-     * Convenience method to set initial quantity (alias for receiptQuantity)
-     * 同时设置数据库遗留字段initial_quantity
+     * 获取总价
+     * 计算公式: unitPrice × receiptQuantity
      */
-    public void setInitialQuantity(BigDecimal initialQuantity) {
-        this.receiptQuantity = initialQuantity;
-        this.initialQuantityField = initialQuantity;  // 同步到遗留字段
+    @Transient
+    public BigDecimal getTotalPrice() {
+        if (unitPrice == null || receiptQuantity == null) {
+            return BigDecimal.ZERO;
+        }
+        return unitPrice.multiply(receiptQuantity);
     }
 
     /**
-     * Convenience method to get received quantity (alias for receiptQuantity)
+     * 获取总价值（与getTotalPrice相同）
      */
-    public BigDecimal getReceivedQuantity() {
-        return this.receiptQuantity;
+    @Transient
+    public BigDecimal getTotalValue() {
+        return getTotalPrice();
     }
 
     /**
-     * Convenience method to set received quantity (alias for receiptQuantity)
-     * 同时设置数据库遗留字段initial_quantity
+     * 获取总重量
+     * 计算公式: weightPerUnit × receiptQuantity
      */
-    public void setReceivedQuantity(BigDecimal receivedQuantity) {
-        this.receiptQuantity = receivedQuantity;
-        this.initialQuantityField = receivedQuantity;  // 同步到遗留字段
+    @Transient
+    public BigDecimal getTotalWeight() {
+        if (weightPerUnit == null || receiptQuantity == null) {
+            return BigDecimal.ZERO;
+        }
+        return weightPerUnit.multiply(receiptQuantity);
     }
 }

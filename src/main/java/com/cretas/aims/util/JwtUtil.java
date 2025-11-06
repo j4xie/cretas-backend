@@ -49,7 +49,19 @@ public class JwtUtil {
     }
 
     /**
-     * 生成Token
+     * 生成Token（包含角色信息）
+     */
+    public String generateToken(Integer userId, String factoryId, String username, String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("factoryId", factoryId);
+        claims.put("username", username);
+        claims.put("role", role);
+        return createToken(claims, username);
+    }
+
+    /**
+     * 生成Token（兼容旧版本，不包含角色）
      */
     public String generateToken(Integer userId, String factoryId, String username) {
         Map<String, Object> claims = new HashMap<>();
@@ -176,7 +188,18 @@ public class JwtUtil {
     }
 
     /**
-     * 生成简单Token（只包含用户ID）
+     * 生成简单Token（只包含用户ID和角色）
+     * 用于移动端等简化场景
+     */
+    public String generateToken(String userId, String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("role", role);
+        return createToken(claims, userId);
+    }
+
+    /**
+     * 生成简单Token（只包含用户ID，兼容旧版本）
      * 用于移动端等简化场景
      */
     public String generateToken(String userId) {
@@ -212,6 +235,17 @@ public class JwtUtil {
         if (claims != null) {
             Object userId = claims.get("userId");
             return userId != null ? userId.toString() : null;
+        }
+        return null;
+    }
+
+    /**
+     * 从Token中获取角色
+     */
+    public String getRoleFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        if (claims != null) {
+            return claims.get("role", String.class);
         }
         return null;
     }

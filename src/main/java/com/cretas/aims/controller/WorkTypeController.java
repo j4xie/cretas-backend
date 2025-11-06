@@ -58,7 +58,8 @@ public class WorkTypeController {
 
         Sort.Direction direction = "ASC".equalsIgnoreCase(sortDirection) ?
                 Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        // 前端使用1-based索引，Spring Data使用0-based索引，需要减1
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(direction, sortBy));
 
         PageResponse<WorkTypeDTO> response = workTypeService.getWorkTypes(factoryId, pageable);
         return ApiResponse.success(response);

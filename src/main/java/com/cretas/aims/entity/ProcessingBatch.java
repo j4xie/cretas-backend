@@ -29,8 +29,7 @@ import java.util.List;
 public class ProcessingBatch extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
-    private Integer id;
+    private Long id;  // 统一为 Long，支持更大数据量
     @Column(name = "factory_id", nullable = false)
     private String factoryId;
     @Column(name = "batch_number", nullable = false, unique = true, length = 50)

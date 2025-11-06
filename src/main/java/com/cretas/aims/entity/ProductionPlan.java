@@ -80,12 +80,15 @@ public class ProductionPlan extends BaseEntity {
     // 关联关系
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "factory_id", referencedColumnName = "id", insertable = false, updatable = false)
+    @org.hibernate.annotations.BatchSize(size = 10)
     private Factory factory;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_type_id", referencedColumnName = "id", insertable = false, updatable = false)
+    @org.hibernate.annotations.BatchSize(size = 20)
     private ProductType productType;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", referencedColumnName = "id", insertable = false, updatable = false)
+    @org.hibernate.annotations.BatchSize(size = 10)
     private User createdByUser;
     @OneToMany(mappedBy = "productionPlan", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<MaterialConsumption> materialConsumptions = new ArrayList<>();

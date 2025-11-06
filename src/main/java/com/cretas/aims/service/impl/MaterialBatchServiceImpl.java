@@ -134,6 +134,7 @@ public class MaterialBatchServiceImpl implements MaterialBatchService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<MaterialBatchDTO> getMaterialBatchList(String factoryId, PageRequest pageRequest) {
         Sort sort = Sort.by(
                 pageRequest.getSortDirection().equalsIgnoreCase("DESC") ?
@@ -232,7 +233,11 @@ public class MaterialBatchServiceImpl implements MaterialBatchService {
         materialBatchAdjustmentRepository.save(adjustment);
 
         // 更新批次数量
-        batch.setCurrentQuantity(newQuantity);
+        // 注意: currentQuantity 现在是计算属性 (receiptQuantity - usedQuantity - reservedQuantity)
+        // 要调整可用数量，需要调整 receiptQuantity
+        BigDecimal qtyAdjustment = newQuantity.subtract(batch.getCurrentQuantity());
+        batch.setReceiptQuantity(batch.getReceiptQuantity().add(qtyAdjustment));
+
         if (newQuantity.compareTo(BigDecimal.ZERO) == 0) {
             batch.setStatus(MaterialBatchStatus.USED_UP);
         }
@@ -270,7 +275,9 @@ public class MaterialBatchServiceImpl implements MaterialBatchService {
         }
 
         batch.setStatus(MaterialBatchStatus.USED_UP);
-        batch.setCurrentQuantity(BigDecimal.ZERO);
+        // 注意: currentQuantity 是计算属性，不能直接设置
+        // 标记为用完：设置 usedQuantity = receiptQuantity - reservedQuantity
+        batch.setUsedQuantity(batch.getReceiptQuantity().subtract(batch.getReservedQuantity()));
         materialBatchRepository.save(batch);
         log.info("标记批次用完: batchId={}", batchId);
     }
@@ -324,7 +331,8 @@ public class MaterialBatchServiceImpl implements MaterialBatchService {
         }
 
         // 使用数量
-        batch.setCurrentQuantity(batch.getCurrentQuantity().subtract(quantity));
+        // 注意: currentQuantity 是计算属性，通过增加 usedQuantity 来减少 currentQuantity
+        batch.setUsedQuantity(batch.getUsedQuantity().add(quantity));
         batch.setLastUsedAt(LocalDateTime.now());
 
         if (batch.getCurrentQuantity().compareTo(BigDecimal.ZERO) == 0) {
@@ -451,12 +459,12 @@ public class MaterialBatchServiceImpl implements MaterialBatchService {
             throw new BusinessException("批次剩余数量不足");
         }
 
-        // 更新剩余数量
-        batch.setRemainingQuantity(batch.getRemainingQuantity().subtract(quantity));
+        // 更新已使用数量 (remainingQuantity 会自动重新计算)
         batch.setUsedQuantity(batch.getUsedQuantity().add(quantity));
         batch.setLastUsedAt(LocalDateTime.now());
 
         // 如果用完了，更新状态
+        // 注意: getRemainingQuantity() 现在是计算属性
         if (batch.getRemainingQuantity().compareTo(BigDecimal.ZERO) == 0) {
             batch.setStatus(MaterialBatchStatus.USED_UP);
         }
@@ -490,8 +498,9 @@ public class MaterialBatchServiceImpl implements MaterialBatchService {
         BigDecimal oldQuantity = batch.getRemainingQuantity();
         BigDecimal adjustment = newQuantity.subtract(oldQuantity);
 
-        batch.setRemainingQuantity(newQuantity);
-        batch.setTotalQuantity(batch.getUsedQuantity().add(newQuantity));
+        // 注意: remainingQuantity 和 totalQuantity 都是计算属性
+        // 要调整剩余数量，需要调整 receiptQuantity
+        batch.setReceiptQuantity(batch.getReceiptQuantity().add(adjustment));
 
         // 记录调整
         MaterialBatchAdjustment adjustmentRecord = new MaterialBatchAdjustment();
@@ -540,11 +549,11 @@ public class MaterialBatchServiceImpl implements MaterialBatchService {
             throw new BusinessException("批次剩余数量不足以预留");
         }
 
-        // 更新预留数量和剩余数量
+        // 更新预留数量 (remainingQuantity 会自动重新计算)
         batch.setReservedQuantity(batch.getReservedQuantity().add(quantity));
-        batch.setRemainingQuantity(batch.getRemainingQuantity().subtract(quantity));
 
         // 如果剩余量为0，更新状态为DEPLETED
+        // 注意: getRemainingQuantity() 现在是计算属性
         if (batch.getRemainingQuantity().compareTo(BigDecimal.ZERO) == 0) {
             batch.setStatus(MaterialBatchStatus.DEPLETED);
         }
@@ -578,11 +587,11 @@ public class MaterialBatchServiceImpl implements MaterialBatchService {
             throw new BusinessException("预留数量不足以释放");
         }
 
-        // 释放预留数量，恢复剩余数量
+        // 释放预留数量 (remainingQuantity 会自动增加)
         batch.setReservedQuantity(batch.getReservedQuantity().subtract(quantity));
-        batch.setRemainingQuantity(batch.getRemainingQuantity().add(quantity));
 
         // 如果之前是DEPLETED状态，恢复为AVAILABLE
+        // 注意: getRemainingQuantity() 现在是计算属性
         if (batch.getStatus() == MaterialBatchStatus.DEPLETED &&
             batch.getRemainingQuantity().compareTo(BigDecimal.ZERO) > 0) {
             batch.setStatus(MaterialBatchStatus.AVAILABLE);

@@ -45,7 +45,7 @@ public interface MaterialBatchRepository extends JpaRepository<MaterialBatch, In
     @Query("SELECT m FROM MaterialBatch m WHERE m.factoryId = :factoryId " +
            "AND m.materialTypeId = :materialTypeId " +
            "AND m.status = 'AVAILABLE' " +
-           "AND m.currentQuantity > 0 " +
+           "AND (m.receiptQuantity - m.usedQuantity - m.reservedQuantity) > 0 " +
            "ORDER BY m.receiptDate ASC, m.id ASC")
     List<MaterialBatch> findAvailableBatchesFIFO(@Param("factoryId") String factoryId,
                                                   @Param("materialTypeId") Integer materialTypeId);
@@ -75,14 +75,14 @@ public interface MaterialBatchRepository extends JpaRepository<MaterialBatch, In
     /**
      * 计算库存总值
      */
-    @Query("SELECT SUM(m.currentQuantity * m.unitPrice) FROM MaterialBatch m " +
+    @Query("SELECT SUM((m.receiptQuantity - m.usedQuantity - m.reservedQuantity) * m.unitPrice) FROM MaterialBatch m " +
            "WHERE m.factoryId = :factoryId AND m.status = 'AVAILABLE'")
     BigDecimal calculateInventoryValue(@Param("factoryId") String factoryId);
 
     /**
      * 按原材料类型统计库存数量
      */
-    @Query("SELECT m.materialTypeId, SUM(m.currentQuantity) FROM MaterialBatch m " +
+    @Query("SELECT m.materialTypeId, SUM(m.receiptQuantity - m.usedQuantity - m.reservedQuantity) FROM MaterialBatch m " +
            "WHERE m.factoryId = :factoryId AND m.status = 'AVAILABLE' " +
            "GROUP BY m.materialTypeId")
     List<Object[]> sumQuantityByMaterialType(@Param("factoryId") String factoryId);
@@ -93,7 +93,7 @@ public interface MaterialBatchRepository extends JpaRepository<MaterialBatch, In
     @Query("SELECT DISTINCT m.materialType FROM MaterialBatch m " +
            "WHERE m.factoryId = :factoryId " +
            "GROUP BY m.materialType " +
-           "HAVING SUM(m.currentQuantity) < m.materialType.minStock")
+           "HAVING SUM(m.receiptQuantity - m.usedQuantity - m.reservedQuantity) < m.materialType.minStock")
     List<Object> findLowStockMaterials(@Param("factoryId") String factoryId);
 
     /**
@@ -169,7 +169,7 @@ public interface MaterialBatchRepository extends JpaRepository<MaterialBatch, In
     @Query("SELECT COUNT(DISTINCT m.materialTypeId) FROM MaterialBatch m " +
            "WHERE m.factoryId = :factoryId " +
            "GROUP BY m.materialTypeId " +
-           "HAVING SUM(m.currentQuantity) < MAX(m.materialType.minStock)")
+           "HAVING SUM(m.receiptQuantity - m.usedQuantity - m.reservedQuantity) < MAX(m.materialType.minStock)")
     Long countLowStockMaterials(@Param("factoryId") String factoryId);
 
     /**

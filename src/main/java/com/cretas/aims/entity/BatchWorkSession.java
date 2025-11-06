@@ -25,10 +25,9 @@ import java.math.BigDecimal;
 public class BatchWorkSession extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
-    private Integer id;
+    private Long id;  // 统一为 Long
     @Column(name = "batch_id", nullable = false)
-    private Integer batchId;
+    private Long batchId;  // 统一为 Long，与 ProcessingBatch.id 类型一致
     @Column(name = "work_session_id", nullable = false)
     private Integer workSessionId;
     @Column(name = "employee_id", nullable = false)

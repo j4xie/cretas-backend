@@ -4,9 +4,12 @@ import com.cretas.aims.dto.common.PageRequest;
 import com.cretas.aims.dto.common.PageResponse;
 import com.cretas.aims.dto.material.RawMaterialTypeDTO;
 import com.cretas.aims.entity.RawMaterialType;
+import com.cretas.aims.entity.MaterialBatch;
 import com.cretas.aims.exception.BusinessException;
 import com.cretas.aims.exception.ResourceNotFoundException;
 import com.cretas.aims.repository.RawMaterialTypeRepository;
+import com.cretas.aims.repository.MaterialBatchRepository;
+import com.cretas.aims.repository.ConversionRepository;
 import com.cretas.aims.service.RawMaterialTypeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +17,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -31,6 +36,11 @@ import java.util.stream.Collectors;
 public class RawMaterialTypeServiceImpl implements RawMaterialTypeService {
 
     private final RawMaterialTypeRepository materialTypeRepository;
+    private final MaterialBatchRepository materialBatchRepository;
+    private final ConversionRepository conversionRepository;
+    
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Override
     @Transactional
@@ -117,13 +127,57 @@ public class RawMaterialTypeServiceImpl implements RawMaterialTypeService {
             throw new BusinessException("无权限操作此原材料类型");
         }
 
-        // TODO: 检查是否有关联的批次
-        // if (materialType.getMaterialBatches() != null && !materialType.getMaterialBatches().isEmpty()) {
-        //     throw new BusinessException("原材料类型有关联的批次，无法删除");
-        // }
+        // 检查是否有关联的批次（使用原生SQL查询，避免触发枚举转换错误）
+        try {
+            // 使用原生SQL查询count，避免加载实体时触发枚举问题
+            Long batchCount = ((Number) entityManager.createNativeQuery(
+                    "SELECT COUNT(*) FROM material_batches WHERE factory_id = ? AND material_type_id = ?")
+                    .setParameter(1, factoryId)
+                    .setParameter(2, id)
+                    .getSingleResult()).longValue();
+            
+            if (batchCount > 0) {
+                log.warn("原材料类型有关联的批次，无法删除: id={}, batchCount={}", id, batchCount);
+                throw new BusinessException("原材料类型有关联的批次（" + batchCount + "个），无法删除。请先删除或转移相关批次。");
+            }
+        } catch (BusinessException e) {
+            // 如果是业务异常（有关联数据），直接抛出
+            throw e;
+        } catch (Exception e) {
+            // 其他异常（如SQL问题）记录日志但不阻止删除
+            log.warn("检查关联批次时出错: {}", e.getMessage());
+        }
 
-        materialTypeRepository.delete(materialType);
-        log.info("原材料类型删除成功: id={}", id);
+        // 检查是否有关联的转换率（使用原生SQL查询，避免加载关联实体）
+        try {
+            // 使用原生SQL查询count，避免加载实体
+            Long conversionCount = ((Number) entityManager.createNativeQuery(
+                    "SELECT COUNT(*) FROM material_product_conversions WHERE factory_id = ? AND material_type_id = ?")
+                    .setParameter(1, factoryId)
+                    .setParameter(2, id)
+                    .getSingleResult()).longValue();
+            
+            if (conversionCount > 0) {
+                log.warn("原材料类型有关联的转换率，无法删除: id={}, conversionCount={}", id, conversionCount);
+                throw new BusinessException("原材料类型有关联的转换率（" + conversionCount + "个），无法删除。请先删除相关转换率。");
+            }
+        } catch (BusinessException e) {
+            // 如果是业务异常（有关联数据），直接抛出
+            throw e;
+        } catch (Exception e) {
+            log.warn("检查关联转换率时出错: {}", e.getMessage());
+        }
+
+        try {
+            materialTypeRepository.delete(materialType);
+            log.info("原材料类型删除成功: id={}", id);
+        } catch (Exception e) {
+            log.error("删除原材料类型失败: id={}, error={}", id, e.getMessage(), e);
+            if (e.getMessage() != null && e.getMessage().contains("foreign key constraint")) {
+                throw new BusinessException("原材料类型有关联数据，无法删除。请先删除相关批次或转换率。");
+            }
+            throw new BusinessException("删除失败: " + e.getMessage());
+        }
     }
 
     @Override

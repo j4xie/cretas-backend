@@ -40,8 +40,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserDTO createUser(String factoryId, CreateUserRequest request) {
-        // 检查用户名是否已存在
-        if (userRepository.existsByFactoryIdAndUsername(factoryId, request.getUsername())) {
+        // 检查用户名是否已存在（用户名全局唯一）
+        if (userRepository.existsByUsername(request.getUsername())) {
             throw new BusinessException("用户名已存在");
         }
 
@@ -214,7 +214,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public boolean checkUsernameExists(String factoryId, String username) {
-        return userRepository.existsByFactoryIdAndUsername(factoryId, username);
+        // 用户名全局唯一，不区分工厂
+        return userRepository.existsByUsername(username);
     }
 
     @Override

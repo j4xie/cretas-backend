@@ -48,6 +48,14 @@ public interface ProductionBatchRepository extends JpaRepository<ProductionBatch
     Page<ProductionBatch> findByFactoryIdAndStatus(String factoryId, String status, Pageable pageable);
 
     /**
+     * 查询时间范围内的批次
+     */
+    java.util.List<ProductionBatch> findByFactoryIdAndCreatedAtBetween(
+            String factoryId,
+            LocalDateTime startDate,
+            LocalDateTime endDate);
+
+    /**
      * 统计某时间后的批次数
      */
     long countByFactoryIdAndCreatedAtAfter(String factoryId, LocalDateTime createdAt);

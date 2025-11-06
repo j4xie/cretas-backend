@@ -87,14 +87,6 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     boolean existsByUsername(String username);
 
     /**
-     * 检查用户名是否存在（已废弃，保留向后兼容）
-     * @deprecated 用户名已改为全局唯一，请使用 existsByUsername(String username)
-     */
-    @Deprecated
-    default boolean existsByFactoryIdAndUsername(String factoryId, String username) {
-        return existsByUsername(username);
-    }
-    /**
      * 获取有薪资信息的用户
      */
     @Query("SELECT u FROM User u WHERE u.factoryId = :factoryId AND u.monthlySalary IS NOT NULL")

@@ -38,17 +38,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(token) && jwtUtil.validateToken(token)) {
                 Integer userId = jwtUtil.getUserIdFromToken(token);
                 String username = jwtUtil.getUsernameFromToken(token);
+                String role = jwtUtil.getRoleFromToken(token);
+
                 if (userId != null) {
-                    // 创建认证对象
+                    // 创建认证对象，从token中提取角色信息
+                    java.util.List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+
+                    // 如果token中有role，使用token中的role
+                    if (role != null && !role.isEmpty()) {
+                        authorities.add(new SimpleGrantedAuthority(role));
+                        log.debug("从token中提取角色: {}", role);
+                    } else {
+                        // 兼容旧token，默认给ROLE_USER权限
+                        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+                        log.debug("token中无角色信息，使用默认角色: ROLE_USER");
+                    }
+
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                             userId,
                             null,
-                            Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
+                            authorities
                     );
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     // 设置到SecurityContext
                     SecurityContextHolder.getContext().setAuthentication(authentication);
-                    log.debug("用户认证成功: userId={}, username={}", userId, username);
+                    log.debug("用户认证成功: userId={}, username={}, role={}", userId, username, role);
                 }
             }
         } catch (Exception e) {

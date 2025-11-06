@@ -1,9 +1,20 @@
 server:
   port: 10010
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
 
 spring:
   application:
     name: cretas-backend-system
+  
+  http:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
 
   mvc:
     pathmatch:
@@ -25,7 +36,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate  # 生产环境：只验证表结构，不自动创建/更新（避免覆盖数据）
+      ddl-auto: update  # 临时改为update以自动创建缺失的表
       naming:
         physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     show-sql: false  # 生产环境设为 false

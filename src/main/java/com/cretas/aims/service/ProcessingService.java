@@ -143,6 +143,35 @@ public interface ProcessingService {
      * @return 健康状态
      */
     Map<String, Object> checkAIServiceHealth();
+
+    // ========== 时间范围分析 ==========
+
+    /**
+     * 获取时间范围内的批次成本分析数据
+     *
+     * @param factoryId 工厂ID
+     * @param startDate 开始时间
+     * @param endDate 结束时间
+     * @return 批次成本数据列表
+     */
+    List<Map<String, Object>> getTimeRangeBatchesCostAnalysis(
+            String factoryId,
+            java.time.LocalDateTime startDate,
+            java.time.LocalDateTime endDate);
+
+    // ========== 批次对比分析 ==========
+
+    /**
+     * 获取多个批次的对比分析数据
+     *
+     * @param factoryId 工厂ID
+     * @param batchIds 批次ID列表（2-5个）
+     * @return 批次对比数据列表
+     */
+    List<Map<String, Object>> getComparativeBatchesCostAnalysis(
+            String factoryId,
+            List<Long> batchIds);
+
     // ========== 仪表盘 ==========
      /**
      * 生产概览

@@ -137,10 +137,23 @@ public class ConversionServiceImpl implements ConversionService {
             page = conversionRepository.findByFactoryId(factoryId, pageable);
         }
 
+        // 批量预加载材料和产品类型 - 避免N+1查询
+        Set<Integer> materialTypeIds = page.getContent().stream()
+                .map(MaterialProductConversion::getMaterialTypeId)
+                .collect(Collectors.toSet());
+        Set<Integer> productTypeIds = page.getContent().stream()
+                .map(MaterialProductConversion::getProductTypeId)
+                .collect(Collectors.toSet());
+
+        Map<Integer, RawMaterialType> materialTypeMap = materialTypeRepository.findAllById(materialTypeIds).stream()
+                .collect(Collectors.toMap(RawMaterialType::getId, m -> m));
+        Map<Integer, ProductType> productTypeMap = productTypeRepository.findAllById(productTypeIds).stream()
+                .collect(Collectors.toMap(ProductType::getId, p -> p));
+
         List<ConversionDTO> dtos = page.getContent().stream()
                 .map(conversion -> {
-                    RawMaterialType materialType = materialTypeRepository.findById(conversion.getMaterialTypeId()).orElse(null);
-                    ProductType productType = productTypeRepository.findById(conversion.getProductTypeId()).orElse(null);
+                    RawMaterialType materialType = materialTypeMap.get(conversion.getMaterialTypeId());
+                    ProductType productType = productTypeMap.get(conversion.getProductTypeId());
                     return convertToDTO(conversion, materialType, productType);
                 })
                 .collect(Collectors.toList());
@@ -156,10 +169,17 @@ public class ConversionServiceImpl implements ConversionService {
         List<MaterialProductConversion> conversions = conversionRepository.findByFactoryIdAndMaterialTypeId(
                 factoryId, materialTypeId);
 
+        // 批量预加载 - 避免N+1查询
+        RawMaterialType materialType = materialTypeRepository.findById(materialTypeId).orElse(null);
+        Set<Integer> productTypeIds = conversions.stream()
+                .map(MaterialProductConversion::getProductTypeId)
+                .collect(Collectors.toSet());
+        Map<Integer, ProductType> productTypeMap = productTypeRepository.findAllById(productTypeIds).stream()
+                .collect(Collectors.toMap(ProductType::getId, p -> p));
+
         return conversions.stream()
                 .map(conversion -> {
-                    RawMaterialType materialType = materialTypeRepository.findById(conversion.getMaterialTypeId()).orElse(null);
-                    ProductType productType = productTypeRepository.findById(conversion.getProductTypeId()).orElse(null);
+                    ProductType productType = productTypeMap.get(conversion.getProductTypeId());
                     return convertToDTO(conversion, materialType, productType);
                 })
                 .collect(Collectors.toList());
@@ -173,10 +193,17 @@ public class ConversionServiceImpl implements ConversionService {
         List<MaterialProductConversion> conversions = conversionRepository.findByFactoryIdAndProductTypeId(
                 factoryId, productTypeId);
 
+        // 批量预加载 - 避免N+1查询
+        ProductType productType = productTypeRepository.findById(productTypeId).orElse(null);
+        Set<Integer> materialTypeIds = conversions.stream()
+                .map(MaterialProductConversion::getMaterialTypeId)
+                .collect(Collectors.toSet());
+        Map<Integer, RawMaterialType> materialTypeMap = materialTypeRepository.findAllById(materialTypeIds).stream()
+                .collect(Collectors.toMap(RawMaterialType::getId, m -> m));
+
         return conversions.stream()
                 .map(conversion -> {
-                    RawMaterialType materialType = materialTypeRepository.findById(conversion.getMaterialTypeId()).orElse(null);
-                    ProductType productType = productTypeRepository.findById(conversion.getProductTypeId()).orElse(null);
+                    RawMaterialType materialType = materialTypeMap.get(conversion.getMaterialTypeId());
                     return convertToDTO(conversion, materialType, productType);
                 })
                 .collect(Collectors.toList());
@@ -208,10 +235,17 @@ public class ConversionServiceImpl implements ConversionService {
         List<MaterialProductConversion> conversions = conversionRepository
                 .findByFactoryIdAndProductTypeId(factoryId, productTypeId);
 
+        // 批量预加载材料类型 - 避免N+1查询
+        Set<Integer> materialTypeIds = conversions.stream()
+                .map(MaterialProductConversion::getMaterialTypeId)
+                .collect(Collectors.toSet());
+        Map<Integer, RawMaterialType> materialTypeMap = materialTypeRepository.findAllById(materialTypeIds).stream()
+                .collect(Collectors.toMap(RawMaterialType::getId, m -> m));
+
         return conversions.stream()
                 .filter(MaterialProductConversion::getIsActive)
                 .map(conversion -> {
-                    RawMaterialType materialType = materialTypeRepository.findById(conversion.getMaterialTypeId()).orElse(null);
+                    RawMaterialType materialType = materialTypeMap.get(conversion.getMaterialTypeId());
 
                     MaterialRequirement requirement = new MaterialRequirement();
                     requirement.setMaterialTypeId(conversion.getMaterialTypeId());
@@ -245,10 +279,17 @@ public class ConversionServiceImpl implements ConversionService {
         List<MaterialProductConversion> conversions = conversionRepository
                 .findByFactoryIdAndMaterialTypeId(factoryId, materialTypeId);
 
+        // 批量预加载产品类型 - 避免N+1查询
+        Set<Integer> productTypeIds = conversions.stream()
+                .map(MaterialProductConversion::getProductTypeId)
+                .collect(Collectors.toSet());
+        Map<Integer, ProductType> productTypeMap = productTypeRepository.findAllById(productTypeIds).stream()
+                .collect(Collectors.toMap(ProductType::getId, p -> p));
+
         return conversions.stream()
                 .filter(MaterialProductConversion::getIsActive)
                 .map(conversion -> {
-                    ProductType productType = productTypeRepository.findById(conversion.getProductTypeId()).orElse(null);
+                    ProductType productType = productTypeMap.get(conversion.getProductTypeId());
 
                     ProductOutput output = new ProductOutput();
                     output.setProductTypeId(conversion.getProductTypeId());
@@ -318,10 +359,23 @@ public class ConversionServiceImpl implements ConversionService {
 
         List<MaterialProductConversion> conversions = conversionRepository.findByFactoryId(factoryId, Pageable.unpaged()).getContent();
 
+        // 批量预加载材料和产品类型 - 避免N+1查询
+        Set<Integer> materialTypeIds = conversions.stream()
+                .map(MaterialProductConversion::getMaterialTypeId)
+                .collect(Collectors.toSet());
+        Set<Integer> productTypeIds = conversions.stream()
+                .map(MaterialProductConversion::getProductTypeId)
+                .collect(Collectors.toSet());
+
+        Map<Integer, RawMaterialType> materialTypeMap = materialTypeRepository.findAllById(materialTypeIds).stream()
+                .collect(Collectors.toMap(RawMaterialType::getId, m -> m));
+        Map<Integer, ProductType> productTypeMap = productTypeRepository.findAllById(productTypeIds).stream()
+                .collect(Collectors.toMap(ProductType::getId, p -> p));
+
         return conversions.stream()
                 .map(conversion -> {
-                    RawMaterialType materialType = materialTypeRepository.findById(conversion.getMaterialTypeId()).orElse(null);
-                    ProductType productType = productTypeRepository.findById(conversion.getProductTypeId()).orElse(null);
+                    RawMaterialType materialType = materialTypeMap.get(conversion.getMaterialTypeId());
+                    ProductType productType = productTypeMap.get(conversion.getProductTypeId());
                     return convertToDTO(conversion, materialType, productType);
                 })
                 .collect(Collectors.toList());

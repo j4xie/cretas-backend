@@ -26,10 +26,9 @@ import java.time.LocalDateTime;
 public class BatchEquipmentUsage extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
-    private Integer id;
+    private Long id;  // 统一为 Long
     @Column(name = "batch_id", nullable = false)
-    private Integer batchId;
+    private Long batchId;  // 统一为 Long，与 ProcessingBatch.id 类型一致
     @Column(name = "equipment_id", nullable = false)
     private Integer equipmentId;
     @Column(name = "start_time", nullable = false)

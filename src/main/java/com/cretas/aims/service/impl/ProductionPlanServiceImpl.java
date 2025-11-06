@@ -109,6 +109,7 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ProductionPlanDTO getProductionPlanById(String factoryId, Integer planId) {
         ProductionPlan plan = productionPlanRepository.findById(planId)
                 .orElseThrow(() -> new ResourceNotFoundException("生产计划", "id", planId));
@@ -122,6 +123,7 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<ProductionPlanDTO> getProductionPlanList(String factoryId, PageRequest pageRequest) {
         Sort sort = Sort.by(
                 pageRequest.getSortDirection().equalsIgnoreCase("DESC") ?
@@ -151,6 +153,7 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ProductionPlanDTO> getProductionPlansByStatus(String factoryId, ProductionPlanStatus status) {
         return productionPlanRepository.findByFactoryIdAndStatus(factoryId, status)
                 .stream()
@@ -159,6 +162,7 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ProductionPlanDTO> getProductionPlansByDateRange(String factoryId, LocalDate startDate, LocalDate endDate) {
         return productionPlanRepository.findByDateRange(factoryId, startDate, endDate)
                 .stream()
@@ -167,6 +171,7 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ProductionPlanDTO> getTodayProductionPlans(String factoryId) {
         return productionPlanRepository.findTodayPlans(factoryId)
                 .stream()
@@ -378,7 +383,8 @@ public class ProductionPlanServiceImpl implements ProductionPlanService {
         materialConsumptionRepository.save(consumption);
 
         // 更新批次库存
-        batch.setCurrentQuantity(batch.getCurrentQuantity().subtract(quantity));
+        // 注意: currentQuantity 是计算属性，通过增加 usedQuantity 来减少 currentQuantity
+        batch.setUsedQuantity(batch.getUsedQuantity().add(quantity));
         batch.setLastUsedAt(LocalDateTime.now());
         if (batch.getCurrentQuantity().compareTo(BigDecimal.ZERO) <= 0) {
             batch.setStatus(MaterialBatchStatus.USED_UP);
