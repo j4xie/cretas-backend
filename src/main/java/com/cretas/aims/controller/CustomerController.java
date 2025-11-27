@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
@@ -34,6 +35,7 @@ import java.util.Map;
 @RequestMapping("/api/mobile/{factoryId}/customers")
 @RequiredArgsConstructor
 @Tag(name = "客户管理", description = "客户管理相关接口")
+@PreAuthorize("hasAnyAuthority('factory_super_admin','permission_admin','department_admin')")
 public class CustomerController {
 
     private final CustomerService customerService;

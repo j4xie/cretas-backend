@@ -58,7 +58,7 @@ public class ProcessingServiceImpl implements ProcessingService {
             throw new BusinessException("批次号已存在: " + batch.getBatchNumber());
         }
         batch.setFactoryId(factoryId);
-        batch.setStatus("PLANNED");
+        batch.setStatus(ProductionBatchStatus.PLANNED);
         batch.setCreatedAt(LocalDateTime.now());
         return productionBatchRepository.save(batch);
     }
@@ -69,7 +69,7 @@ public class ProcessingServiceImpl implements ProcessingService {
         if (!"PLANNED".equals(batch.getStatus())) {
             throw new BusinessException("批次状态不允许开始生产: " + batch.getStatus());
         }
-        batch.setStatus("IN_PROGRESS");
+        batch.setStatus(ProductionBatchStatus.IN_PROGRESS);
         batch.setStartTime(LocalDateTime.now());
         batch.setSupervisorId(supervisorId);
         return productionBatchRepository.save(batch);
@@ -81,7 +81,7 @@ public class ProcessingServiceImpl implements ProcessingService {
         if (!"IN_PROGRESS".equals(batch.getStatus())) {
             throw new BusinessException("只有进行中的批次可以暂停");
         }
-        batch.setStatus("PAUSED");
+        batch.setStatus(ProductionBatchStatus.PAUSED);
         batch.setNotes(batch.getNotes() != null ? batch.getNotes() + "\n暂停原因: " + reason : "暂停原因: " + reason);
         return productionBatchRepository.save(batch);
     }
@@ -94,7 +94,7 @@ public class ProcessingServiceImpl implements ProcessingService {
             !"PAUSED".equals(batch.getStatus())) {
             throw new BusinessException("批次状态不允许完成生产: " + batch.getStatus());
         }
-        batch.setStatus("COMPLETED");
+        batch.setStatus(ProductionBatchStatus.COMPLETED);
         batch.setEndTime(LocalDateTime.now());
         batch.setActualQuantity(actualQuantity);
         batch.setGoodQuantity(goodQuantity);
@@ -110,7 +110,7 @@ public class ProcessingServiceImpl implements ProcessingService {
         if ("COMPLETED".equals(batch.getStatus())) {
             throw new BusinessException("已完成的批次不能取消");
         }
-        batch.setStatus("CANCELLED");
+        batch.setStatus(ProductionBatchStatus.CANCELLED);
         batch.setNotes(batch.getNotes() != null ? batch.getNotes() + "\n取消原因: " + reason : "取消原因: " + reason);
         return productionBatchRepository.save(batch);
     }

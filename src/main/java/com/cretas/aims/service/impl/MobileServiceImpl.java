@@ -62,6 +62,8 @@ public class MobileServiceImpl implements MobileService {
     private final WhitelistRepository whitelistRepository;
     private final PlatformAdminRepository platformAdminRepository;
 
+    private static final long ACCESS_TOKEN_EXPIRES_SECONDS = 3600L;
+
     @Value("${app.upload.path:uploads/mobile}")
     private String uploadPath;
 
@@ -111,16 +113,13 @@ public class MobileServiceImpl implements MobileService {
         User user = userRepository.findByFactoryIdAndUsername(factoryId, username)
                 .orElseThrow(() -> new BusinessException("用户名或密码错误"));
 
-        // 验证密码
-        log.info("🔍 密码验证 - 用户: {}, 输入密码: {}, 数据库hash: {}",
-            username, password, user.getPassword() != null ? user.getPassword().substring(0, 30) + "..." : "null");
+        // 白名单校验（基于手机号）
+        validateUserWhitelist(factoryId, user.getPhone());
 
+        // 验证密码
         if (!passwordEncoder.matches(password, user.getPassword())) {
-            log.error("❌ 密码验证失败 - 用户: {}", username);
             throw new BusinessException("用户名或密码错误");
         }
-
-        log.info("✅ 密码验证成功 - 用户: {}", username);
 
         // 检查用户状态
         if (!user.getIsActive()) {
@@ -133,7 +132,7 @@ public class MobileServiceImpl implements MobileService {
         }
 
         // 生成令牌（包含角色信息）
-        String role = user.getRoleCode() != null ? user.getRoleCode() : "viewer";
+        String role = resolveUserRole(user);
         String token = jwtUtil.generateToken(user.getId().toString(), role);
         String refreshToken = jwtUtil.generateRefreshToken(user.getId().toString());
 
@@ -141,17 +140,19 @@ public class MobileServiceImpl implements MobileService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
+        saveSession(user.getId(), user.getFactoryId(), token, refreshToken, ACCESS_TOKEN_EXPIRES_SECONDS);
+
         // 构建响应
         return MobileDTO.LoginResponse.builder()
                 .userId(user.getId())
                 .username(user.getUsername())
                 .factoryId(user.getFactoryId())
                 .factoryName(user.getFactory() != null ? user.getFactory().getName() : null)
-                .role(user.getRole())
+                .role(role)
                 .permissions(parsePermissions(user.getPermissions()))
                 .token(token)
                 .refreshToken(refreshToken)
-                .expiresIn(3600L) // 1小时
+                .expiresIn(ACCESS_TOKEN_EXPIRES_SECONDS)
                 .lastLoginTime(user.getLastLogin())
                 .profile(MobileDTO.UserProfile.builder()
                         .name(user.getName())
@@ -192,6 +193,8 @@ public class MobileServiceImpl implements MobileService {
         // 更新最后登录时间
         admin.setLastLoginAt(LocalDateTime.now());
         platformAdminRepository.save(admin);
+
+        saveSession(admin.getId(), null, token, refreshToken, ACCESS_TOKEN_EXPIRES_SECONDS);
 
         // 构建响应
         return MobileDTO.LoginResponse.builder()
@@ -477,22 +480,27 @@ public class MobileServiceImpl implements MobileService {
     public MobileDTO.LoginResponse refreshToken(String refreshToken) {
         log.debug("刷新令牌: token={}", refreshToken);
 
-        // 验证刷新令牌
-        if (!jwtUtil.validateToken(refreshToken)) {
-            throw new BusinessException("无效的刷新令牌");
+        Session session = sessionRepository.findByRefreshTokenAndIsRevokedFalse(refreshToken)
+                .orElseThrow(() -> new BusinessException("刷新令牌无效或已过期"));
+
+        if (session.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new BusinessException("刷新令牌已过期");
         }
 
-        String userId = jwtUtil.getUserIdFromTokenAsString(refreshToken);
-        User user = userRepository.findById(Integer.parseInt(userId))
+        User user = userRepository.findById(session.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
 
-        // 生成新的访问令牌
-        String newToken = jwtUtil.generateToken(userId);
+        String role = resolveUserRole(user);
+        String newToken = jwtUtil.generateToken(user.getId().toString(), role);
+
+        session.setToken(newToken);
+        session.setExpiresAt(LocalDateTime.now().plusSeconds(ACCESS_TOKEN_EXPIRES_SECONDS));
+        sessionRepository.save(session);
 
         return MobileDTO.LoginResponse.builder()
                 .token(newToken)
                 .refreshToken(refreshToken) // 保持原刷新令牌
-                .expiresIn(3600L)
+                .expiresIn(ACCESS_TOKEN_EXPIRES_SECONDS)
                 .build();
     }
 
@@ -505,7 +513,7 @@ public class MobileServiceImpl implements MobileService {
             removeDevice(userId, deviceId);
         }
 
-        // TODO: 清除相关的会话和缓存
+        sessionRepository.revokeAllUserSessions(userId);
     }
 
     @Override
@@ -717,5 +725,46 @@ public class MobileServiceImpl implements MobileService {
 
         // 撤销所有会话
         sessionRepository.revokeAllUserSessions(user.getId());
+    }
+
+    /**
+     * 统一解析用户角色
+     */
+    private String resolveUserRole(User user) {
+        if (StringUtils.hasText(user.getPosition())) {
+            return user.getPosition();
+        }
+        if (StringUtils.hasText(user.getRoleCode())) {
+            return user.getRoleCode();
+        }
+        return "viewer";
+    }
+
+    /**
+     * 持久化会话
+     */
+    private void saveSession(Integer userId, String factoryId, String token, String refreshToken, long expiresInSeconds) {
+        Session session = new Session();
+        session.setUserId(userId);
+        session.setFactoryId(factoryId);
+        session.setToken(token);
+        session.setRefreshToken(refreshToken);
+        session.setExpiresAt(LocalDateTime.now().plusSeconds(expiresInSeconds));
+        session.setIsRevoked(false);
+        sessionRepository.save(session);
+    }
+
+    /**
+     * 校验用户是否在白名单且有效
+     */
+    private void validateUserWhitelist(String factoryId, String phoneNumber) {
+        if (!StringUtils.hasText(phoneNumber)) {
+            throw new BusinessException("用户未绑定手机号，无法进行白名单校验");
+        }
+        Whitelist whitelist = whitelistRepository.findByFactoryIdAndPhoneNumber(factoryId, phoneNumber)
+                .orElseThrow(() -> new BusinessException("该手机号未在白名单中，无法登录"));
+        if (!whitelist.isValid()) {
+            throw new BusinessException("白名单已失效或被禁用");
+        }
     }
 }

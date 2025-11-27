@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
@@ -31,6 +32,7 @@ import java.util.List;
 @RequestMapping("/api/{factoryId}/users")
 @RequiredArgsConstructor
 @Tag(name = "用户管理", description = "用户管理相关接口")
+@PreAuthorize("hasAnyAuthority('factory_super_admin','permission_admin','department_admin')")
 public class UserController {
 
     private final UserService userService;
